@@ -6,7 +6,7 @@ function rightWall(obj) { return obj.x + obj.width; }
 // ЗАГРУЗКА ИГРОВЫХ КАРТИНОК
 const imgRun = new Image(); imgRun.src = 'hero_run.png';
 const imgJump = new Image(); imgJump.src = 'hero_jump.png';
-const imgLand = new Image(); imgLand.src = 'hero_land.png'; // Наше приземление!
+const imgLand = new Image(); imgLand.src = 'hero_land.png'; 
 const barrelImg = new Image(); barrelImg.src = 'barrel.png';
 const trashImg = new Image(); trashImg.src = 'trash.png';
 const roachImg = new Image(); roachImg.src = 'roach.png';
@@ -15,42 +15,37 @@ function Dinosaur (x, dividerY) {
     this.width = 65; 
     this.height = 80;
     this.x = x;
-    this.baseY = dividerY - this.height; // Уровень земли
+    this.baseY = dividerY - this.height; 
     this.y = this.baseY;
     this.vy = 0;
-    this.jumpVelocity = -16;
+    this.jumpVelocity = -14; // Чуть уменьшили силу прыжка под новую скорость
     
     this.animTicks = 0;
     this.bobY = 0; 
     
-    // Переменные для контроля приземления
-    this.landTimer = 0; // Счетчик кадров для позы на колене
+    this.landTimer = 0; 
     this.isLanding = false; 
 }
 
 Dinosaur.prototype.draw = function(context) {
-    // 1. ЕСЛИ ПРИЗЕМЛИЛСЯ И СТОИТ НА КОЛЕНЕ
     if (this.isLanding) {
         context.drawImage(imgLand, this.x, this.y, this.width, this.height);
         this.landTimer--;
         if (this.landTimer <= 0) {
-            this.isLanding = false; // Время вышло, возвращаемся в бег
+            this.isLanding = false; 
         }
     }
-    // 2. ЕСЛИ В ВОЗДУХЕ (ВВЕРХ ИЛИ ВНИЗ)
     else if (this.vy !== 0 || this.y < this.baseY) {
         context.drawImage(imgJump, this.x, this.y, this.width, this.height);
     } 
-    // 3. ОБЫЧНЫЙ БЕГ С ПОКАЧИВАНИЕМ
     else {
         this.animTicks++;
-        this.bobY = Math.sin(this.animTicks * 0.2) * 3; // Эффект покачивания ног при беге
+        this.bobY = Math.sin(this.animTicks * 0.15) * 3; // Замедлили покачивание под темп бега
         context.drawImage(imgRun, this.x, this.y + this.bobY, this.width, this.height);
     }
 };
 
 Dinosaur.prototype.jump = function() {
-    // Прыгать можно только если не находимся в фазе приземления на колено
     if (!this.isLanding) {
         this.vy = this.jumpVelocity;
     }
@@ -60,16 +55,13 @@ Dinosaur.prototype.update = function(divider, gravity) {
     this.y += this.vy;
     this.vy += gravity;
     
-    // Момент касания земли
     if (bottomWall(this) > topWall(divider) && this.vy > 0) {
         this.y = this.baseY;
         this.vy = 0;
         
-        // ВКЛЮЧАЕМ ЭФФЕКТ СУПЕРГЕРОЙСКОГО ПРИЗЕМЛЕНИЯ
-        // Поза на колене зафиксируется на 12 кадров (около 0.2 секунды), создавая крутой тайминг
         if (!this.isLanding) {
             this.isLanding = true;
-            this.landTimer = 12; 
+            this.landTimer = 10; // Уменьшили задержку на колене для плавности
         }
     }
 };
@@ -89,16 +81,19 @@ function Cactus(gameWidth, groundY) {
     let rand = Math.random();
     this.isFlying = false;
 
-    if (rand < 0.35) {
+    if (rand < 0.4) {
+        // Бочка на земле
         this.img = barrelImg;
         this.width = 35; this.height = 50;
-    } else if (rand < 0.70) {
+    } else if (rand < 0.75) {
+        // Мусор на земле
         this.img = trashImg;
         this.width = 55; this.height = 35;
     } else {
+        // ТАРАКАН-БЛОКИРАТОР: Летит высоко под потолком прыжка!
         this.img = roachImg;
         this.width = 40; this.height = 40;
-        this.y = groundY - 85; 
+        this.y = groundY - 145; // ПОДНЯЛИ ВЫШЕ: перекрывает прыжок, проходим строго снизу пешком!
         this.isFlying = true;
     }
     
@@ -124,11 +119,12 @@ function Game () {
         if (e.key === " " || e.key === "ArrowUp") document.spacePressed = false; 
     });
     
-    this.gravity = 0.95; 
+    this.gravity = 0.75; // Уменьшили гравитацию, прыжок стал более плавным и размеренным
     this.divider = new Divider(this.width, this.height);
     this.dino = new Dinosaur(Math.floor(0.1 * this.width), this.divider.y);
     this.cacti = [];
-    this.runSpeed = -6.5;
+    
+    this.runSpeed = -4.5; // СРЕДНЯЯ СКОРОСТЬ (Было -6.5, теперь бег комфортный и контролируемый)
     this.paused = false;
     this.noOfFrames = 0;
     this.score = 0;
@@ -151,16 +147,17 @@ Game.prototype.update = function () {
     
     if(this.cacti.length == 0) {
         this.spawnCactus(0.5);
-    } else if (this.cacti.length > 0 && this.width - leftWall(this.cacti[this.cacti.length-1]) > 280) {
-        this.spawnCactus(0.03); 
+    } else if (this.cacti.length > 0 && this.width - leftWall(this.cacti[this.cacti.length-1]) > 320) {
+        // Увеличили дистанцию между препятствиями, чтобы игрок успевал среагировать
+        this.spawnCactus(0.02); 
     } 
     
     for (let i = 0; i < this.cacti.length; i++) this.cacti[i].x += this.runSpeed;
     
-    // Хитбоксы столкновений
+    // Проверка хитбоксов
     for(let i = 0; i < this.cacti.length; i++){
-        if(rightWall(this.dino) - 10 >= leftWall(this.cacti[i]) && 
-           leftWall(this.dino) + 10 <= rightWall(this.cacti[i]) && 
+        if(rightWall(this.dino) - 12 >= leftWall(this.cacti[i]) && 
+           leftWall(this.dino) + 12 <= rightWall(this.cacti[i]) && 
            bottomWall(this.dino) - 4 >= topWall(this.cacti[i]) && 
            topWall(this.dino) + 4 <= bottomWall(this.cacti[i])) {
                this.paused = true;
