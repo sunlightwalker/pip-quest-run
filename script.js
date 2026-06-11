@@ -18,11 +18,13 @@ function Dinosaur (x, dividerY) {
     this.baseY = dividerY - this.height; 
     this.y = this.baseY;
     this.vy = 0;
-    this.jumpVelocity = -14; // Чуть уменьшили силу прыжка под новую скорость
+    
+    // Сила прыжков
+    this.normalJumpVelocity = -12; // Обычный прыжок
+    this.longJumpVelocity = -15;   // Дальний прыжок
     
     this.animTicks = 0;
     this.bobY = 0; 
-    
     this.landTimer = 0; 
     this.isLanding = false; 
 }
@@ -31,23 +33,21 @@ Dinosaur.prototype.draw = function(context) {
     if (this.isLanding) {
         context.drawImage(imgLand, this.x, this.y, this.width, this.height);
         this.landTimer--;
-        if (this.landTimer <= 0) {
-            this.isLanding = false; 
-        }
+        if (this.landTimer <= 0) this.isLanding = false; 
     }
     else if (this.vy !== 0 || this.y < this.baseY) {
         context.drawImage(imgJump, this.x, this.y, this.width, this.height);
     } 
     else {
         this.animTicks++;
-        this.bobY = Math.sin(this.animTicks * 0.15) * 3; // Замедлили покачивание под темп бега
+        this.bobY = Math.sin(this.animTicks * 0.1) * 3; // Плавный бег под низкую скорость
         context.drawImage(imgRun, this.x, this.y + this.bobY, this.width, this.height);
     }
 };
 
-Dinosaur.prototype.jump = function() {
-    if (!this.isLanding) {
-        this.vy = this.jumpVelocity;
+Dinosaur.prototype.jump = function(type) {
+    if (!this.isLanding && this.y === this.baseY) {
+        this.vy = (type === 'long') ? this.longJumpVelocity : this.normalJumpVelocity;
     }
 };
 
@@ -61,7 +61,7 @@ Dinosaur.prototype.update = function(divider, gravity) {
         
         if (!this.isLanding) {
             this.isLanding = true;
-            this.landTimer = 10; // Уменьшили задержку на колене для плавности
+            this.landTimer = 8; 
         }
     }
 };
@@ -77,24 +77,22 @@ Divider.prototype.draw = function(context) {
     context.fillRect(this.x, this.y, this.width, this.height);
 };
 
-function Cactus(gameWidth, groundY) {
+function Cactus(gameWidth, groundY, forceType) {
     let rand = Math.random();
     this.isFlying = false;
 
-    if (rand < 0.4) {
-        // Бочка на земле
-        this.img = barrelImg;
-        this.width = 35; this.height = 50;
-    } else if (rand < 0.75) {
-        // Мусор на земле
-        this.img = trashImg;
-        this.width = 55; this.height = 35;
-    } else {
-        // ТАРАКАН-БЛОКИРАТОР: Летит высоко под потолком прыжка!
+    // Если игра решила заспавнить именно таракана рядом с препятствием
+    if (forceType === "roach" || (rand > 0.75 && !forceType)) {
         this.img = roachImg;
         this.width = 40; this.height = 40;
-        this.y = groundY - 145; // ПОДНЯЛИ ВЫШЕ: перекрывает прыжок, проходим строго снизу пешком!
+        this.y = groundY - 155; // ПОДНЯЛИ ЕЩЕ ВЫШЕ! Проходим пешком снизу без проблем!
         this.isFlying = true;
+    } else if (rand < 0.4) {
+        this.img = barrelImg;
+        this.width = 35; this.height = 50;
+    } else {
+        this.img = trashImg;
+        this.width = 55; this.height = 35;
     }
     
     this.x = gameWidth;
@@ -111,61 +109,88 @@ function Game () {
     this.height = canvas.height;
     this.context = canvas.getContext("2d");
     
+    // Считывание клавиш управления
     document.spacePressed = false;
+    document.upPressed = false;
+    
     window.addEventListener("keydown", (e) => { 
-        if (e.key === " " || e.key === "ArrowUp") document.spacePressed = true; 
+        if (e.key === " ") document.spacePressed = true; 
+        if (e.key === "ArrowUp") document.upPressed = true;
     });
     window.addEventListener("keyup", (e) => { 
-        if (e.key === " " || e.key === "ArrowUp") document.spacePressed = false; 
+        if (e.key === " ") document.spacePressed = false; 
+        if (e.key === "ArrowUp") document.upPressed = false;
     });
     
-    this.gravity = 0.75; // Уменьшили гравитацию, прыжок стал более плавным и размеренным
+    this.gravity = 0.65; // Очень мягкая гравитация для комфортных прыжков
     this.divider = new Divider(this.width, this.height);
     this.dino = new Dinosaur(Math.floor(0.1 * this.width), this.divider.y);
     this.cacti = [];
     
-    this.runSpeed = -4.5; // СРЕДНЯЯ СКОРОСТЬ (Было -6.5, теперь бег комфортный и контролируемый)
+    this.runSpeed = -3.2; // МАКСИМАЛЬНО КОМФОРТНАЯ СКОРОСТЬ (была -6.5)
     this.paused = false;
-    this.noOfFrames = 0;
     this.score = 0;
+    
+    // СИСТЕМА ТАЙМЕРА СТАРТА
+    this.startTimer = 180; // 180 кадров = ровно 3 секунды при 60 FPS
 }
 
-Game.prototype.spawnCactus = function(prob) {
-    if(Math.random() <= prob) this.cacti.push(new Cactus(this.width, this.divider.y));
+Game.prototype.spawnCactus = function(prob, forceType) {
+    if(Math.random() <= prob) {
+        this.cacti.push(new Cactus(this.width, this.divider.y, forceType));
+    }
 };
 
 Game.prototype.update = function () {
     if(this.paused) return;
     
-    if (document.spacePressed == true && bottomWall(this.dino) >= topWall(this.divider)) {
-        this.dino.jump();
+    // Если идет отсчет старта, уменьшаем таймер и не двигаем мир
+    if (this.startTimer > 0) {
+        this.startTimer--;
+        return;
+    }
+    
+    // Управление прыжками
+    if (document.upPressed == true && bottomWall(this.dino) >= topWall(this.divider)) {
+        this.dino.jump('long'); // Дальний прыжок на стрелочку вверх
+    } else if (document.spacePressed == true && bottomWall(this.dino) >= topWall(this.divider)) {
+        this.dino.jump('normal'); // Обычный прыжок на пробел
     }
     
     this.dino.update(this.divider, this.gravity);
     
     if(this.cacti.length > 0 && rightWall(this.cacti[0]) < 0) this.cacti.shift();
     
+    // Умный спавн препятствий
     if(this.cacti.length == 0) {
         this.spawnCactus(0.5);
-    } else if (this.cacti.length > 0 && this.width - leftWall(this.cacti[this.cacti.length-1]) > 320) {
-        // Увеличили дистанцию между препятствиями, чтобы игрок успевал среагировать
-        this.spawnCactus(0.02); 
-    } 
+    } else {
+        let lastCactus = this.cacti[this.cacti.length - 1];
+        let distance = this.width - leftWall(lastCactus);
+        
+        // Если прошло достаточно места после бочки/мусора, подкидываем ТАРАКАНА поближе!
+        if (!lastCactus.isFlying && distance > 130 && distance < 140) {
+            this.spawnCactus(0.25, "roach"); // Высокий шанс спавна таракана сразу за наземным препятствием
+        } 
+        // Стандартный спавн новой пачки препятствий на большом расстоянии
+        else if (distance > 380) {
+            this.spawnCactus(0.02); 
+        }
+    }
     
     for (let i = 0; i < this.cacti.length; i++) this.cacti[i].x += this.runSpeed;
     
-    // Проверка хитбоксов
+    // Проверка хитбоксов столкновений (сделали хитбокс маскота чуть уже для честности)
     for(let i = 0; i < this.cacti.length; i++){
-        if(rightWall(this.dino) - 12 >= leftWall(this.cacti[i]) && 
-           leftWall(this.dino) + 12 <= rightWall(this.cacti[i]) && 
+        if(rightWall(this.dino) - 15 >= leftWall(this.cacti[i]) && 
+           leftWall(this.dino) + 15 <= rightWall(this.cacti[i]) && 
            bottomWall(this.dino) - 4 >= topWall(this.cacti[i]) && 
            topWall(this.dino) + 4 <= bottomWall(this.cacti[i])) {
                this.paused = true;
                alert("ИГРА ОКОНЧЕНА!\nКапитал сохранен: " + this.score + " крышек.\nНажми F5 для перезапуска.");
         }
     }
-    this.noOfFrames++;
-    this.score = Math.floor(this.noOfFrames/10);
+    this.score++;
 };
 
 Game.prototype.draw = function () {
@@ -173,6 +198,16 @@ Game.prototype.draw = function () {
     this.divider.draw(this.context);
     this.dino.draw(this.context);
     for (let i = 0; i < this.cacti.length; i++) this.cacti[i].draw(this.context);
+    
+    // РЕНДЕРИНГ ТАЙМЕРА СТАРТА
+    if (this.startTimer > 0) {
+        let secondsLeft = Math.ceil(this.startTimer / 60);
+        this.context.fillStyle = "#000000";
+        this.context.font = "bold 40px 'Courier New', monospace";
+        this.context.textAlign = "center";
+        this.context.fillText(secondsLeft, this.width / 2, this.height / 2);
+        this.context.textAlign = "left"; // сброс
+    }
     
     this.context.fillStyle = "#000000";
     this.context.font = "bold 16px monospace";
