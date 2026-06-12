@@ -7,6 +7,7 @@ body {
     margin: 0;
     background-color: #1a1a1a;
     font-family: 'Courier New', monospace;
+    overflow: hidden; /* Убираем случайную прокрутку страницы пальцем */
     user-select: none;
     -webkit-user-select: none;
 }
@@ -19,11 +20,12 @@ body {
 }
 
 canvas {
-    width: 100%; /* Растягивается под экран мобилки */
+    display: block;
+    width: 100%; /* Идеальное сжатие под ширину любого телефона */
     height: auto;
     border: 4px solid #000000;
     background-color: #A4C639;
     box-shadow: 0 0 20px rgba(164, 198, 57, 0.4);
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent; /* Убирает синюю рамку при тапе */
+    touch-action: none; /* Отключает стандартные жесты браузера (зум, скролл) над игрой */
+    -webkit-tap-highlight-color: transparent;
 }
