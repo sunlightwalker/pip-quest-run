@@ -1,3 +1,51 @@
+// ИНИЦИАЛИЗАЦИЯ TELEGRAM WEB APP
+// Этот блок автоматически связывает игру с мессенджером
+const tg = window.Telegram?.WebApp;
+if (tg) {
+    tg.ready();        // Сообщаем TG, что игра загрузилась успешно
+    tg.expand();       // Раскрываем игру на весь экран смартфона
+}
+
+// Получаем реальные данные игрока из Telegram. Если тестируем на ПК — включаются "гостевые" настройки
+const userId = tg?.initDataUnsafe?.user?.id || "local_host_user";
+const username = tg?.initDataUnsafe?.user?.username || "Scavenger";
+
+// ФУНКЦИЯ СОХРАНЕНИЯ ОЧКОВ В СИСТЕМУ
+function saveCoinsToSystem(finalScore) {
+    console.log(`Игрок ${username} (ID: ${userId}) набрал крышек: ${finalScore}`);
+
+    // ======================================================================
+    // КОГДА СОЗДАШЬ СВОЙ СЕРВЕР, ПРОСТО ЗАМЕНИ URL НИЖЕ НА СВОЮ ССЫЛКУ!
+    // Пример: const url = "https://my-tg-bot-server.ru/api/save";
+    // ======================================================================
+    const url = "СЮДА_ТЫ_ВСТАВИШЬ_ССЫЛКУ_НА_СВОЙ_СЕРВЕР_ПОЗЖЕ"; 
+
+    // Если ссылки еще нет, спасаем очки — пишем в локальную память телефона (localStorage)
+    if (url.includes("СЮДА_ТЫ_ВСТАВИШЬ_ССЫЛКУ")) {
+        let currentBalance = parseInt(localStorage.getItem("total_caps") || "0");
+        currentBalance += finalScore;
+        localStorage.setItem("total_caps", currentBalance);
+        console.log("Сервер не подключен. Очки сохранены в память телефона. Общий баланс: " + currentBalance);
+        return; 
+    }
+
+    // Если ссылка на сервер есть — отправляем данные в твою базу данных
+    const data = {
+        telegram_id: userId,
+        username: username,
+        score: finalScore
+    };
+
+    fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    })
+    .then(res => console.log("Успешно отправлено на сервер!"))
+    .catch(err => console.error("Ошибка сети при отправке на сервер:", err));
+}
+
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ХИТБОКСОВ
 function topWall(obj) { return obj.y; }
 function bottomWall(obj) { return obj.y + obj.height; }
 function leftWall(obj) { return obj.x; }
@@ -70,7 +118,7 @@ Divider.prototype.draw = function(context) {
     context.fillRect(this.x, this.y, this.width, this.height);
 };
 
-// ВРАГИ (С ОБНОВЛЕННЫМ ДВИЖЕНИЕМ ТАРАКАНА ВВЕРХ-ВНИЗ)
+// ВРАГИ
 function Cactus(gameWidth, groundY, forceType) {
     let rand = Math.random();
     this.isFlying = false;
@@ -79,15 +127,14 @@ function Cactus(gameWidth, groundY, forceType) {
         this.img = roachImg;
         this.width = 45; 
         this.height = 45;
-        this.baseY = groundY - 130; // Базовая высота полета таракана
+        this.baseY = groundY - 130; 
         this.y = this.baseY;
         this.isFlying = true;
         
-        // Логика маневрирования таракана во времени
         this.moveTimer = 0;
-        this.moveInterval = 80 + Math.floor(Math.random() * 40); // 1.3 - 2 секунды на смену направления
-        this.directionY = Math.random() > 0.5 ? 1 : -1; // Начальное направление: 1 - вниз, -1 - вверх
-        this.speedY = 1.2; // Скорость перемещения по вертикали
+        this.moveInterval = 80 + Math.floor(Math.random() * 40); 
+        this.directionY = Math.random() > 0.5 ? 1 : -1; 
+        this.speedY = 1.2; 
     } else if (rand < 0.4) {
         this.img = barrelImg;
         this.width = 35; this.height = 50;
@@ -100,22 +147,14 @@ function Cactus(gameWidth, groundY, forceType) {
 }
 
 Cactus.prototype.update = function(speed) {
-    this.x += speed; // Движение влево вместе с уровнем
-
-    // Индивидуальное поведение для летящего таракана
+    this.x += speed;
     if (this.isFlying) {
         this.moveTimer++;
-        
-        // Каждые 1-2 секунды меняем направление движения
         if (this.moveTimer >= this.moveInterval) {
-            this.directionY *= -1; // Разворот по вертикали
+            this.directionY *= -1; 
             this.moveTimer = 0;
         }
-
-        // Сдвигаем таракана вверх или вниз
         this.y += this.directionY * this.speedY;
-
-        // Ограничиваем коридор полета, чтобы он не улетал в космос и не падал сквозь пол
         let maxUp = this.baseY - 50;
         let maxDown = this.baseY + 40;
         if (this.y < maxUp) { this.y = maxUp; this.directionY = 1; }
@@ -144,13 +183,11 @@ function AtomCap(x, y, isAir) {
 
 AtomCap.prototype.update = function(speed) {
     this.x += speed;
-    
     this.tickCount++;
     if (this.tickCount >= this.animSpeed) {
         this.tickCount = 0;
         this.currentFrame = (this.currentFrame + 1) % this.totalFrames;
     }
-
     this.waveTicks += 0.05;
     let amplitude = this.isAir ? 25 : 8; 
     this.y = this.baseY + Math.sin(this.waveTicks) * amplitude;
@@ -262,7 +299,6 @@ Game.prototype.update = function () {
         this.capSpawnTimer = 0;
     }
     
-    // Обновление позиций врагов (включая вертикальные маневры таракана)
     for (let i = 0; i < this.cacti.length; i++) this.cacti[i].update(this.runSpeed);
     
     for (let i = 0; i < this.atomCaps.length; i++) {
@@ -284,7 +320,11 @@ Game.prototype.update = function () {
            bottomWall(this.dino) - 8 >= topWall(this.cacti[i]) &&
            topWall(this.dino) + 8 <= bottomWall(this.cacti[i])) {
                this.paused = true;
-               alert("ИГРА ОКОНЧЕНА!\nСобрано крышек: " + this.score);
+               
+               // ОТПРАВКА ОЧКОВ ПРИ СМЕРТИ ПЕРСОНАЖА
+               saveCoinsToSystem(this.score);
+
+               alert(`ИГРА ОКОНЧЕНА!\nИгрок: ${username}\nСобрано за забег: ${this.score} крышек.`);
                window.location.reload(); 
         }
     }
