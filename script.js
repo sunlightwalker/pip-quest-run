@@ -1,57 +1,38 @@
 // ИНИЦИАЛИЗАЦИЯ TELEGRAM WEB APP
-// Этот блок автоматически связывает игру с мессенджером
 const tg = window.Telegram?.WebApp;
 if (tg) {
-    tg.ready();        // Сообщаем TG, что игра загрузилась успешно
-    tg.expand();       // Раскрываем игру на весь экран смартфона
+    tg.ready();        
+    tg.expand();       
 }
 
-// Получаем реальные данные игрока из Telegram. Если тестируем на ПК — включаются "гостевые" настройки
 const userId = tg?.initDataUnsafe?.user?.id || "local_host_user";
 const username = tg?.initDataUnsafe?.user?.username || "Scavenger";
 
-// ФУНКЦИЯ СОХРАНЕНИЯ ОЧКОВ В СИСТЕМУ
 function saveCoinsToSystem(finalScore) {
     console.log(`Игрок ${username} (ID: ${userId}) набрал крышек: ${finalScore}`);
-
-    // ======================================================================
-    // КОГДА СОЗДАШЬ СВОЙ СЕРВЕР, ПРОСТО ЗАМЕНИ URL НИЖЕ НА СВОЮ ССЫЛКУ!
-    // Пример: const url = "https://my-tg-bot-server.ru/api/save";
-    // ======================================================================
     const url = "СЮДА_ТЫ_ВСТАВИШЬ_ССЫЛКУ_НА_СВОЙ_СЕРВЕР_ПОЗЖЕ"; 
 
-    // Если ссылки еще нет, спасаем очки — пишем в локальную память телефона (localStorage)
     if (url.includes("СЮДА_ТЫ_ВСТАВИШЬ_ССЫЛКУ")) {
         let currentBalance = parseInt(localStorage.getItem("total_caps") || "0");
         currentBalance += finalScore;
         localStorage.setItem("total_caps", currentBalance);
-        console.log("Сервер не подключен. Очки сохранены в память телефона. Общий баланс: " + currentBalance);
         return; 
     }
 
-    // Если ссылка на сервер есть — отправляем данные в твою базу данных
-    const data = {
-        telegram_id: userId,
-        username: username,
-        score: finalScore
-    };
-
+    const data = { telegram_id: userId, username: username, score: finalScore };
     fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data)
-    })
-    .then(res => console.log("Успешно отправлено на сервер!"))
-    .catch(err => console.error("Ошибка сети при отправке на сервер:", err));
+    }).catch(err => console.error(err));
 }
 
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ХИТБОКСОВ
 function topWall(obj) { return obj.y; }
 function bottomWall(obj) { return obj.y + obj.height; }
 function leftWall(obj) { return obj.x; }
-function rightWall(obj) { return obj.x + obj.width; }
+function rightWall(obj) { return obj.width === undefined ? obj.x : obj.x + obj.width; }
 
-// ЗАГРУЗКА ИЗОБРАЖЕНИЙ
+// ЗАГРУЗКА ИЗОБРАЖЕНИЙ ПЕРСОНАЖА И ВРАГОВ
 const imgRun = new Image(); imgRun.src = 'hero_land.png'; 
 const imgJump = new Image(); imgJump.src = 'hero_jump.png';
 const imgLand = new Image(); imgLand.src = 'hero_run.png'; 
@@ -79,14 +60,20 @@ function Dinosaur (x, dividerY) {
 Dinosaur.prototype.draw = function(context) {
     if (this.isLanding) {
         context.drawImage(imgLand, this.x, this.y, this.width, this.height);
-        this.landTimer--;
-        if (this.landTimer <= 0) this.isLanding = false; 
     } else if (this.y < this.baseY) {
         context.drawImage(imgJump, this.x, this.y, this.width, this.height);
     } else {
-        this.animTicks++;
-        this.bobY = Math.sin(this.animTicks * 0.1) * 3; 
         context.drawImage(imgRun, this.x, this.y + this.bobY, this.width, this.height);
+    }
+};
+
+Dinosaur.prototype.update = function(modifier) {
+    this.animTicks += modifier * 60;
+    this.bobY = Math.sin(this.animTicks * 0.1) * 3; 
+
+    if (this.isLanding) {
+        this.landTimer -= modifier * 60;
+        if (this.landTimer <= 0) this.isLanding = false;
     }
 };
 
@@ -96,9 +83,9 @@ Dinosaur.prototype.jump = function(type) {
     }
 };
 
-Dinosaur.prototype.update = function(divider, gravity) {
-    this.y += this.vy;
-    this.vy += gravity;
+Dinosaur.prototype.physics = function(gravity, modifier) {
+    this.y += this.vy * (modifier * 60);
+    this.vy += gravity * (modifier * 60);
     if (this.y > this.baseY) {
         this.y = this.baseY;
         this.vy = 0;
@@ -114,8 +101,98 @@ function Divider (gameWidth, gameHeight) {
     this.y = gameHeight - this.height - Math.floor(0.2 * gameHeight);
 }
 Divider.prototype.draw = function(context) {
-    context.fillStyle = "#000000";
+    context.fillStyle = "#333333";
     context.fillRect(this.x, this.y, this.width, this.height);
+};
+
+// СОЛНЦЕ С ЛУЧАМИ
+function PostApocalypseSun() {
+    this.x = 120;
+    this.y = 100;
+    this.radius = 45;
+    this.angle = 0;
+}
+PostApocalypseSun.prototype.draw = function(context, modifier) {
+    this.angle += 0.2 * modifier; 
+    context.save();
+    context.translate(this.x, this.y);
+    context.rotate(this.angle);
+    
+    // Рисуем лучи солнца
+    context.strokeStyle = "rgba(240, 210, 140, 0.15)";
+    context.lineWidth = 4;
+    for (let i = 0; i < 12; i++) {
+        context.rotate(Math.PI / 6);
+        context.beginPath();
+        context.moveTo(0, 0);
+        context.lineTo(0, 400);
+        context.stroke();
+    }
+    context.restore();
+
+    // Само солнце
+    context.beginPath();
+    context.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    context.fillStyle = "rgba(245, 222, 179, 0.6)";
+    context.fill();
+};
+
+// РАЗРУШЕННЫЕ ЗДАНИЯ (ФОН)
+function CityBackground(gameWidth, groundY) {
+    this.gameWidth = gameWidth;
+    this.groundY = groundY;
+    this.buildings = [];
+    this.parallaxSpeedFactor = 0.15; // Движутся медленнее земли
+
+    // Генерируем панораму разрушенного города
+    let currentX = 0;
+    while (currentX < gameWidth + 300) {
+        let width = 60 + Math.random() * 80;
+        let height = 100 + Math.random() * 150;
+        this.buildings.push({ x: currentX, width: width, height: height, seed: Math.random() });
+        currentX += width - 5; 
+    }
+}
+
+CityBackground.prototype.update = function(gameSpeed, modifier) {
+    let speed = gameSpeed * this.parallaxSpeedFactor * (modifier * 60);
+    
+    for (let i = 0; i < this.buildings.length; i++) {
+        this.buildings[i].x += speed;
+    }
+
+    // Зацикливание зданий (чтобы город не кончался)
+    if (this.buildings[0].x + this.buildings[0].width < 0) {
+        let lastBuilding = this.buildings[this.buildings.length - 1];
+        let first = this.buildings.shift();
+        first.x = lastBuilding.x + lastBuilding.width - 5;
+        first.height = 100 + Math.random() * 150; // Меняем высоту при переспавне
+        this.buildings.push(first);
+    }
+};
+
+CityBackground.prototype.draw = function(context) {
+    context.fillStyle = "rgba(110, 115, 105, 0.35)"; // Мрачный цвет постапокалипсиса
+    
+    for (let i = 0; i < this.buildings.length; i++) {
+        let b = this.buildings[i];
+        context.fillRect(b.x, this.groundY - b.height, b.width, b.height);
+        
+        // Рисуем сколы и разрушения на крышах зданий
+        context.fillStyle = "rgba(230, 235, 225, 1.0)"; // Цвет неба, чтобы "срезать" куски стен
+        context.beginPath();
+        if (b.seed > 0.5) {
+            context.moveTo(b.x, this.groundY - b.height);
+            context.lineTo(b.x + b.width * 0.4, this.groundY - b.height);
+            context.lineTo(b.x, this.groundY - b.height + b.height * 0.2);
+        } else {
+            context.moveTo(b.x + b.width, this.groundY - b.height);
+            context.lineTo(b.x + b.width * 0.5, this.groundY - b.height);
+            context.lineTo(b.x + b.width, this.groundY - b.height + b.height * 0.3);
+        }
+        context.fill();
+        context.fillStyle = "rgba(110, 115, 105, 0.35)"; // Возвращаем цвет зданий
+    }
 };
 
 // ВРАГИ
@@ -125,8 +202,7 @@ function Cactus(gameWidth, groundY, forceType) {
     
     if (forceType === "roach" || (rand > 0.8)) {
         this.img = roachImg;
-        this.width = 45; 
-        this.height = 45;
+        this.width = 45; this.height = 45;
         this.baseY = groundY - 130; 
         this.y = this.baseY;
         this.isFlying = true;
@@ -146,15 +222,15 @@ function Cactus(gameWidth, groundY, forceType) {
     if (!this.isFlying) this.y = groundY - this.height;
 }
 
-Cactus.prototype.update = function(speed) {
-    this.x += speed;
+Cactus.prototype.update = function(speed, modifier) {
+    this.x += speed * (modifier * 60);
     if (this.isFlying) {
-        this.moveTimer++;
+        this.moveTimer += modifier * 60;
         if (this.moveTimer >= this.moveInterval) {
             this.directionY *= -1; 
             this.moveTimer = 0;
         }
-        this.y += this.directionY * this.speedY;
+        this.y += this.directionY * this.speedY * (modifier * 60);
         let maxUp = this.baseY - 50;
         let maxDown = this.baseY + 40;
         if (this.y < maxUp) { this.y = maxUp; this.directionY = 1; }
@@ -181,14 +257,14 @@ function AtomCap(x, y, isAir) {
     this.waveTicks = Math.random() * 100; 
 }
 
-AtomCap.prototype.update = function(speed) {
-    this.x += speed;
-    this.tickCount++;
+AtomCap.prototype.update = function(speed, modifier) {
+    this.x += speed * (modifier * 60);
+    this.tickCount += modifier * 60;
     if (this.tickCount >= this.animSpeed) {
         this.tickCount = 0;
         this.currentFrame = (this.currentFrame + 1) % this.totalFrames;
     }
-    this.waveTicks += 0.05;
+    this.waveTicks += 0.05 * (modifier * 60);
     let amplitude = this.isAir ? 25 : 8; 
     this.y = this.baseY + Math.sin(this.waveTicks) * amplitude;
 };
@@ -211,6 +287,7 @@ function Game () {
     this.context = canvas.getContext("2d");
     
     this.touchStartTime = 0;
+    this.lastTime = performance.now(); // Для фикса скорости ПК/Мобильный
 
     const handleStart = (e) => {
         if (e.cancelable) e.preventDefault(); 
@@ -234,6 +311,10 @@ function Game () {
     this.divider = new Divider(this.width, this.height);
     this.dino = new Dinosaur(50, this.divider.y);
     
+    // Создаем окружение
+    this.sun = new PostApocalypseSun();
+    this.cityBg = new CityBackground(this.width, this.divider.y);
+
     this.cacti = [];
     this.atomCaps = [];
     
@@ -270,22 +351,25 @@ Game.prototype.spawnCapWave = function() {
     }
 };
 
-Game.prototype.update = function () {
+Game.prototype.update = function (modifier) {
     if(this.paused) return;
-    if (this.startTimer > 0) { this.startTimer--; return; }
+    if (this.startTimer > 0) { this.startTimer -= modifier * 60; return; }
     
-    this.gameTicks++;
+    this.gameTicks += modifier * 60;
     
-    if (this.gameTicks % 600 === 0 && this.runSpeed > -9) {
+    if (this.gameTicks >= 600 && this.runSpeed > -9) {
         this.runSpeed -= 0.4;
+        this.gameTicks = 0;
     }
 
-    this.dino.update(this.divider, this.gravity);
+    this.dino.update(modifier);
+    this.dino.physics(this.gravity, modifier);
+    this.cityBg.update(this.runSpeed, modifier);
     
     if(this.cacti.length > 0 && rightWall(this.cacti[0]) < 0) this.cacti.shift();
     if(this.atomCaps.length > 0 && rightWall(this.atomCaps[0]) < 0) this.atomCaps.shift();
     
-    this.cactusSpawnTimer++;
+    this.cactusSpawnTimer += modifier * 60;
     if (this.cactusSpawnTimer > 110) { 
         if (Math.random() < 0.4) {
             this.cacti.push(new Cactus(this.width, this.divider.y));
@@ -293,16 +377,16 @@ Game.prototype.update = function () {
         }
     }
 
-    this.capSpawnTimer++;
+    this.capSpawnTimer += modifier * 60;
     if (this.capSpawnTimer > 160 && this.atomCaps.length === 0) {
         this.spawnCapWave();
         this.capSpawnTimer = 0;
     }
     
-    for (let i = 0; i < this.cacti.length; i++) this.cacti[i].update(this.runSpeed);
+    for (let i = 0; i < this.cacti.length; i++) this.cacti[i].update(this.runSpeed, modifier);
     
     for (let i = 0; i < this.atomCaps.length; i++) {
-        this.atomCaps[i].update(this.runSpeed);
+        this.atomCaps[i].update(this.runSpeed, modifier);
         let cap = this.atomCaps[i];
         if (rightWall(this.dino) - 5 >= leftWall(cap) && 
             leftWall(this.dino) + 5 <= rightWall(cap) && 
@@ -320,16 +404,13 @@ Game.prototype.update = function () {
            bottomWall(this.dino) - 8 >= topWall(this.cacti[i]) &&
            topWall(this.dino) + 8 <= bottomWall(this.cacti[i])) {
                this.paused = true;
-               
-               // ОТПРАВКА ОЧКОВ ПРИ СМЕРТИ ПЕРСОНАЖА
                saveCoinsToSystem(this.score);
-
                alert(`ИГРА ОКОНЧЕНА!\nИгрок: ${username}\nСобрано за забег: ${this.score} крышек.`);
                window.location.reload(); 
         }
     }
     
-    this.scoreTicks++;
+    this.scoreTicks += modifier * 60;
     let pointsSpeed = this.runSpeed < -6 ? 20 : 30; 
     if (this.scoreTicks >= pointsSpeed) {
         this.score += 1;
@@ -337,8 +418,15 @@ Game.prototype.update = function () {
     }
 };
 
-Game.prototype.draw = function () {
-    this.context.clearRect(0, 0, this.width, this.height);
+Game.prototype.draw = function (modifier) {
+    // Красивое мягкое небо пустоши
+    this.context.fillStyle = "rgba(230, 235, 225, 1.0)";
+    this.context.fillRect(0, 0, this.width, this.height);
+    
+    // Отрисовка элементов фона
+    this.sun.draw(this.context, modifier);
+    this.cityBg.draw(this.context);
+    
     this.divider.draw(this.context);
     this.dino.draw(this.context);
     for (let i = 0; i < this.cacti.length; i++) this.cacti[i].draw(this.context);
@@ -346,22 +434,28 @@ Game.prototype.draw = function () {
     
     if (this.startTimer > 0) {
         let secondsLeft = Math.ceil(this.startTimer / 60);
-        this.context.fillStyle = "#000000";
+        this.context.fillStyle = "#333333";
         this.context.font = "bold 40px Courier New";
         this.context.textAlign = "center";
         this.context.fillText(secondsLeft, this.width / 2, this.height / 2);
     }
     
-    this.context.fillStyle = "#000000";
-    this.context.font = "bold 20px Courier New";
-    this.context.textAlign = "right";
-    this.context.fillText("CAPS: " + this.score, this.width - 20, 40);
+    this.context.fillStyle = "#333333";
+    context = this.context;
+    context.font = "bold 20px Courier New";
+    context.textAlign = "right";
+    context.fillText("CAPS: " + this.score, this.width - 20, 40);
 };
 
 var game = new Game();
-function main () {
-    game.update();
-    game.draw();
+function main (now) {
+    // ВЫЧИСЛЕНИЕ ДЕЛЬТА-ТАЙМА (Делает скорость одинаковой везде!)
+    let modifier = (now - game.lastTime) / 1000;
+    if (modifier > 0.1) modifier = 0.1; // Защита от сильных лагов
+    game.lastTime = now;
+
+    game.update(modifier);
+    game.draw(modifier);
     window.requestAnimationFrame(main);
 }
 window.requestAnimationFrame(main);
