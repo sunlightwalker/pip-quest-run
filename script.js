@@ -19,8 +19,8 @@ function Dinosaur (x, dividerY) {
     this.y = this.baseY;
     this.vy = 0;
     
-    this.normalJumpVelocity = -11.5; // Обычный прыжок под бочку
-    this.longJumpVelocity = -15.5;   // Мощный прыжок под большой мусор
+    this.normalJumpVelocity = -11.5; 
+    this.longJumpVelocity = -15.5;   
     
     this.animTicks = 0;
     this.bobY = 0; 
@@ -86,13 +86,11 @@ function Cactus(gameWidth, groundY, forceType) {
         this.y = groundY - 155; 
         this.isFlying = true;
     } else if (rand < 0.4) {
-        // Бочка осталась прежней
         this.img = barrelImg;
         this.width = 35; this.height = 50;
     } else {
-        // УВЕЛИЧИЛИ МУСОР: Сделали его шире и выше (было 55х35, стало 75х48)
         this.img = trashImg;
-        this.width = 75; this.height = 48;
+        this.width = 75; this.height = 48; // Большой мусор
     }
     
     this.x = gameWidth;
@@ -109,45 +107,33 @@ function Game () {
     this.height = canvas.height;
     this.context = canvas.getContext("2d");
     
-    // Переменные для отслеживания удержания экрана
     this.touchStartTime = 0;
     this.isReadyToJump = false;
 
-    // Функция начала нажатия (Экран / Мышка)
-    const startPress = (e) => {
-        e.preventDefault();
+    // ЖЕЛЕЗНОЕ СЕНСОРНОЕ УПРАВЛЕНИЕ (PointerEvents работают везде)
+    canvas.addEventListener('pointerdown', (e) => {
         if (this.startTimer > 0 || this.paused) return;
         if (this.dino.y === this.dino.baseY) {
             this.touchStartTime = Date.now();
             this.isReadyToJump = true;
         }
-    };
+    });
 
-    // Функция отпускания экрана (Определяет тип прыжка)
-    const endPress = (e) => {
-        e.preventDefault();
+    canvas.addEventListener('pointerup', (e) => {
         if (!this.isReadyToJump) return;
         this.isReadyToJump = false;
 
         let pressDuration = Date.now() - this.touchStartTime;
 
-        // Если удерживали экран дольше 200 миллисекунд (0.2 сек) — прыгаем далеко
-        if (pressDuration > 200) {
+        // Если зажали дольше 220мс — прыжок дальний, если просто тапнули — обычный
+        if (pressDuration > 220) {
             this.dino.jump('long');
         } else {
             this.dino.jump('normal');
         }
-    };
+    });
 
-    // Слушатели для смартфонов (Тач-события)
-    canvas.addEventListener('touchstart', startPress, {passive: false});
-    canvas.addEventListener('touchend', endPress, {passive: false});
-
-    // Слушатели для ПК (Клик мышкой)
-    canvas.addEventListener('mousedown', startPress);
-    canvas.addEventListener('mouseup', endPress);
-    
-    // Поддержка клавиатуры (Пробел - обычный, Стрелка вверх - дальний)
+    // Клавиатура для ПК тоже остается
     window.addEventListener("keydown", (e) => { 
         if (e.key === " ") this.dino.jump('normal');
         if (e.key === "ArrowUp") this.dino.jump('long');
@@ -196,14 +182,14 @@ Game.prototype.update = function () {
     
     for (let i = 0; i < this.cacti.length; i++) this.cacti[i].x += this.runSpeed;
     
-    // Проверка столкновений (адаптировали хитбоксы под большой мусор)
     for(let i = 0; i < this.cacti.length; i++){
         if(rightWall(this.dino) - 15 >= leftWall(this.cacti[i]) && 
            leftWall(this.dino) + 15 <= rightWall(this.cacti[i]) && 
            bottomWall(this.dino) - 4 >= topWall(this.cacti[i]) && 
            topWall(this.dino) + 4 <= bottomWall(this.cacti[i])) {
                this.paused = true;
-               alert("ИГРА ОКОНЧЕНА!\nКапитал сохранен: " + this.score + " крышек.\nОбнови страницу, чтобы начать заново.");
+               alert("ИГРА ОКОНЧЕНА!\nКапитал сохранен: " + this.score + " крышек.");
+               window.location.reload(); // Автоматически перезагрузит страницу при клике на окне смерти
         }
     }
     this.score++;
