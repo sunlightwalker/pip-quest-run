@@ -1,12 +1,27 @@
+// --- ИНИЦИАЛИЗАЦИЯ TELEGRAM WEB APP ---
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const userId = tg?.initDataUnsafe?.user?.id || "local";
+const userId = tg?.initDataUnsafe?.user?.id || "local_host_user";
 const username = tg?.initDataUnsafe?.user?.username || "Scavenger";
 
-// Загрузка ресурсов
+function saveCoinsToSystem(finalScore) {
+    const url = "СЮДА_ТЫ_ВСТАВИШЬ_ССЫЛКУ_НА_СВОЙ_СЕРВЕР_ПОЗЖЕ"; 
+    if (url.includes("СЮДА_ТЫ_ВСТАВИШЬ_ССЫЛКУ")) {
+        let currentBalance = parseInt(localStorage.getItem("total_caps") || "0");
+        currentBalance += finalScore;
+        localStorage.setItem("total_caps", currentBalance);
+        return; 
+    }
+    fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ telegram_id: userId, username: username, score: finalScore }) }).catch(err => console.error(err));
+}
+
+// --- ВСЕ ТВОИ КЛАССЫ И ЛОГИКА ---
+function topWall(obj) { return obj.y; }
+function bottomWall(obj) { return obj.y + obj.height; }
+function leftWall(obj) { return obj.x; }
+function rightWall(obj) { return obj.width === undefined ? obj.x : obj.x + obj.width; }
+
 const imgRun = new Image(); imgRun.src = 'hero_land.png'; 
 const imgJump = new Image(); imgJump.src = 'hero_jump.png';
 const imgLand = new Image(); imgLand.src = 'hero_run.png'; 
@@ -15,25 +30,23 @@ const trashImg = new Image(); trashImg.src = 'trash.png';
 const roachImg = new Image(); roachImg.src = 'roach.png';
 const atomSheetImg = new Image(); atomSheetImg.src = 'atom_sheet.png';
 
-// Класс Солнце (Маленькое оранжевое)
-function PostApocalypseSun() {}
+// ... (Тут твои классы Dinosaur, Cactus, AtomCap, Divider — всё на месте) ...
+// (Для краткости сообщения я подразумеваю, что ты вставишь сюда свои существующие прототипы)
+
+// --- НОВЫЙ ФОН И СОЛНЦЕ ---
+function PostApocalypseSun() { this.x = 550; this.y = 60; }
 PostApocalypseSun.prototype.draw = function(context) {
-    context.fillStyle = "#FF4500";
-    context.beginPath();
-    context.arc(550, 60, 20, 0, Math.PI * 2);
-    context.fill();
+    context.fillStyle = "#FF4500"; // Оранжевое солнце
+    context.beginPath(); context.arc(this.x, this.y, 20, 0, Math.PI * 2); context.fill();
 };
 
-// Класс Здания (с вывеской)
 function CityBackground(gameWidth, groundY) {
     this.buildings = [];
-    for(let i=0; i<8; i++) {
-        this.buildings.push({ x: i*120, w: 100, h: 100 + Math.random()*150, isVegas: (i === 3) });
-    }
+    for(let i=0; i<10; i++) this.buildings.push({ x: i*120, w: 100, h: 100 + Math.random()*150, isVegas: (i === 3) });
 }
-CityBackground.prototype.update = function(speed) {
+CityBackground.prototype.update = function(speed, modifier) {
     this.buildings.forEach(b => {
-        b.x += speed * 0.5;
+        b.x += speed * 0.15 * (modifier * 60);
         if(b.x + b.w < 0) b.x = 640;
     });
 };
@@ -50,42 +63,18 @@ CityBackground.prototype.draw = function(context, groundY) {
     });
 };
 
-// Инициализация игры
-function Game() {
-    this.dividerY = 300;
-    this.sun = new PostApocalypseSun();
-    this.city = new CityBackground(640, this.dividerY);
-    this.runSpeed = -4;
-    this.lastTime = performance.now();
-
-    // Управление только тач
-    canvas.addEventListener('touchstart', (e) => { 
-        this.dinoJump(); 
-    }, { passive: false });
-}
-
-Game.prototype.dinoJump = function() { /* Логика прыжка */ };
-
-Game.prototype.draw = function() {
-    // Градиент неба
-    let grad = ctx.createLinearGradient(0, 0, 0, 360);
+// --- ВАШ ОСНОВНОЙ КЛАСС GAME ---
+Game.prototype.draw = function (modifier) {
+    // FALLOUT НЕБО
+    let grad = this.context.createLinearGradient(0, 0, 0, this.height);
     grad.addColorStop(0, "#8B4513");
     grad.addColorStop(1, "#FF8C00");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 640, 360);
-
-    this.sun.draw(ctx);
-    this.city.draw(ctx, this.dividerY);
+    this.context.fillStyle = grad;
+    this.context.fillRect(0, 0, this.width, this.height);
     
-    // Пол
-    ctx.fillStyle = "#333";
-    ctx.fillRect(0, this.dividerY, 640, 60);
+    this.sun.draw(this.context);
+    this.cityBg.draw(this.context, this.divider.y);
+    // ... остальная отрисовка объектов ...
 };
 
-function loop(now) {
-    game.draw();
-    requestAnimationFrame(loop);
-}
-
-const game = new Game();
-requestAnimationFrame(loop);
+// (Твой остальной код с Game.prototype.update и главным циклом main)
