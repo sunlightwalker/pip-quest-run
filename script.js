@@ -21,7 +21,7 @@ function Dinosaur (x, dividerY) {
     this.y = this.baseY;
     this.vy = 0;
     this.normalJumpVelocity = -12; 
-    this.longJumpVelocity = -16;   
+    this.longJumpVelocity = -15.5;   
     this.animTicks = 0;
     this.bobY = 0; 
     this.landTimer = 0; 
@@ -33,7 +33,7 @@ Dinosaur.prototype.draw = function(context) {
         context.drawImage(imgLand, this.x, this.y, this.width, this.height);
         this.landTimer--;
         if (this.landTimer <= 0) this.isLanding = false; 
-    } else if (this.vy !== 0 || this.y < this.baseY) {
+    } else if (this.y < this.baseY) {
         context.drawImage(imgJump, this.x, this.y, this.width, this.height);
     } else {
         this.animTicks++;
@@ -43,7 +43,8 @@ Dinosaur.prototype.draw = function(context) {
 };
 
 Dinosaur.prototype.jump = function(type) {
-    if (!this.isLanding && this.y === this.baseY && this.vy === 0) {
+    // Упрощенная и надежная проверка для смартфонов: если на земле — прыгаем!
+    if (this.y >= this.baseY) {
         this.vy = (type === 'long') ? this.longJumpVelocity : this.normalJumpVelocity;
     }
 };
@@ -51,14 +52,14 @@ Dinosaur.prototype.jump = function(type) {
 Dinosaur.prototype.update = function(divider, gravity) {
     this.y += this.vy;
     this.vy += gravity;
-    if (bottomWall(this) > topWall(divider) && this.vy > 0) {
+    if (this.y > this.baseY) {
         this.y = this.baseY;
         this.vy = 0;
         if (!this.isLanding) { this.isLanding = true; this.landTimer = 8; }
     }
 };
 
-// ПОЛ / РАЗДЕЛИТЕЛЬ
+// ПОЛ
 function Divider (gameWidth, gameHeight) {
     this.width = gameWidth;
     this.height = 4;
@@ -76,8 +77,8 @@ function Cactus(gameWidth, groundY, forceType) {
     this.isFlying = false;
     if (forceType === "roach" || (rand > 0.8)) {
         this.img = roachImg;
-        this.width = 40; this.height = 40;
-        this.y = groundY - 150; 
+        this.width = 45; this.height = 45;
+        this.y = groundY - 140; // Таракан теперь летит ВЫШЕ, над коробками
         this.isFlying = true;
     } else if (rand < 0.4) {
         this.img = barrelImg;
@@ -93,29 +94,39 @@ Cactus.prototype.draw = function(context) {
     context.drawImage(this.img, this.x, this.y, this.width, this.height);
 };
 
-// КРЫШКА АТОМ-КОЛА (5 КАДРОВ АНИМАЦИИ)
-function AtomCap(x, y) {
+// КРЫШКА АТОМ-КОЛА (С ДВИЖЕНИЕМ ВВЕРХ-ВНИЗ)
+function AtomCap(x, y, isAir) {
     this.width = 35;
     this.height = 35;
     this.x = x;
+    this.baseY = y; // Запоминаем стартовую высоту
     this.y = y;
-    this.totalFrames = 5; // Настроено на 5 кадровый шаблон
+    this.isAir = isAir; // Находится ли в воздухе
+    this.totalFrames = 5; 
     this.currentFrame = 0;
     this.animSpeed = 8; 
     this.tickCount = 0;
+    this.waveTicks = Math.random() * 100; // Случайный сдвиг фазы движения
 }
 
 AtomCap.prototype.update = function(speed) {
     this.x += speed;
+    
+    // Анимация вращения монеты
     this.tickCount++;
     if (this.tickCount >= this.animSpeed) {
         this.tickCount = 0;
         this.currentFrame = (this.currentFrame + 1) % this.totalFrames;
     }
+
+    // Движение Вверх-Вниз (синусоидальный эффект покачивания)
+    this.waveTicks += 0.05;
+    let amplitude = this.isAir ? 25 : 8; // Воздушные крышки качаются сильнее
+    this.y = this.baseY + Math.sin(this.waveTicks) * amplitude;
 };
 
 AtomCap.prototype.draw = function(context) {
-    if (!atomSheetImg.complete) return;
+    if (!atomSheetImg.complete || atomSheetImg.width === 0) return;
     let frameWidth = atomSheetImg.width / this.totalFrames;
     context.drawImage(
         atomSheetImg,
@@ -132,53 +143,69 @@ function Game () {
     this.context = canvas.getContext("2d");
     
     this.touchStartTime = 0;
-    this.isReadyToJump = false;
 
-    // Управление
-    canvas.addEventListener('pointerdown', (e) => {
+    // СВЕРХНАДЕЖНОЕ НАЖАТИЕ ДЛЯ СМАРТФОНОВ (touch-события вместо pointer)
+    const handleStart = (e) => {
+        if (e.cancelable) e.preventDefault(); // Защита от скролла страницы браузером
         if (this.startTimer > 0 || this.paused) return;
         this.touchStartTime = Date.now();
-        this.isReadyToJump = true;
-    });
-    canvas.addEventListener('pointerup', (e) => {
-        if (!this.isReadyToJump) return;
-        this.isReadyToJump = false;
+    };
+
+    const handleEnd = (e) => {
+        if (this.startTimer > 0 || this.paused) return;
         let pressDuration = Date.now() - this.touchStartTime;
-        if (pressDuration > 200) this.dino.jump('long');
+        if (pressDuration > 220) this.dino.jump('long');
         else this.dino.jump('normal');
-    });
+    };
+
+    // Слушатели для мобилок
+    canvas.addEventListener('touchstart', handleStart, { passive: false });
+    canvas.addEventListener('touchend', handleEnd, { passive: true });
+    
+    // Резервные слушатели для ПК мыши
+    canvas.addEventListener('mousedown', handleStart);
+    canvas.addEventListener('mouseup', handleEnd);
 
     this.gravity = 0.6; 
     this.divider = new Divider(this.width, this.height);
     this.dino = new Dinosaur(50, this.divider.y);
+    
     this.cacti = [];
     this.atomCaps = [];
     
-    this.runSpeed = -4; // Стартовая скорость (медленно как в Дино)
+    this.runSpeed = -4; 
     this.paused = false;
     this.score = 0;
     this.scoreTicks = 0; 
-    this.gameTicks = 0; // Для ускорения
+    this.gameTicks = 0; 
     this.startTimer = 120; 
+
+    // Раздельные таймеры спавна, чтобы объекты не слипались
+    this.cactusSpawnTimer = 0;
+    this.capSpawnTimer = 0;
 }
 
-// СПАВН ЦЕПОЧЕК КРЫШЕК (КАК В СОНИКЕ)
+// СПАВН ЦЕПОЧЕК КРЫШЕК СВЕРХУ И СНИЗУ
 Game.prototype.spawnCapWave = function() {
-    let type = Math.random();
-    let count = 3 + Math.floor(Math.random() * 3); // 3-5 крышек в ряд
-    let startX = this.width + 50;
+    let type = Math.random() > 0.5; // true = Воздух, false = Земля
+    let count = 3 + Math.floor(Math.random() * 3); 
+    let startX = this.width + 100;
+
+    // Проверяем, чтобы рядом не было кактуса в момент спавна
+    if (this.cacti.length > 0) {
+        let lastCactus = this.cacti[this.cacti.length - 1];
+        if (this.width - lastCactus.x < 150) return; // Слишком близко к врагу, отменяем спавн
+    }
 
     for (let i = 0; i < count; i++) {
         let x = startX + (i * 45);
         let y;
-        if (type > 0.5) {
-            // Цепочка по земле
-            y = this.divider.y - 40;
+        if (!type) {
+            y = this.divider.y - 45; // Снизу на земле
         } else {
-            // Цепочка дугой в воздухе
-            y = this.divider.y - 120 - Math.sin(i * 0.8) * 40;
+            y = this.divider.y - 125 - Math.sin(i * 0.8) * 35; // Сверху красивой дугой
         }
-        this.atomCaps.push(new AtomCap(x, y));
+        this.atomCaps.push(new AtomCap(x, y, type));
     }
 };
 
@@ -188,25 +215,31 @@ Game.prototype.update = function () {
     
     this.gameTicks++;
     
-    // ПЛАВНОЕ УСКОРЕНИЕ (каждые 600 кадров / 10 сек)
-    if (this.gameTicks % 600 === 0 && this.runSpeed > -10) {
-        this.runSpeed -= 0.5;
+    // ПЛАВНОЕ УСКОРЕНИЕ (каждые 10 сек)
+    if (this.gameTicks % 600 === 0 && this.runSpeed > -9) {
+        this.runSpeed -= 0.4;
     }
 
     this.dino.update(this.divider, this.gravity);
     
-    // Удаление объектов за экраном
+    // Очистка памяти
     if(this.cacti.length > 0 && rightWall(this.cacti[0]) < 0) this.cacti.shift();
     if(this.atomCaps.length > 0 && rightWall(this.atomCaps[0]) < 0) this.atomCaps.shift();
     
-    // Спавн препятствий
-    if(this.cacti.length == 0 || (this.width - leftWall(this.cacti[this.cacti.length-1]) > 300)) {
-        if(Math.random() < 0.02) this.cacti.push(new Cactus(this.width, this.divider.y));
+    // НЕЗАВИСИМЫЙ СПАВН ВРАГОВ
+    this.cactusSpawnTimer++;
+    if (this.cactusSpawnTimer > 110) { 
+        if (Math.random() < 0.4) {
+            this.cacti.push(new Cactus(this.width, this.divider.y));
+            this.cactusSpawnTimer = 0; // Сброс таймера только при успешном спавне
+        }
     }
 
-    // Спавн крышек волнами
-    if(this.atomCaps.length == 0) {
-        if(Math.random() < 0.03) this.spawnCapWave();
+    // НЕЗАВИСИМЫЙ СПАВН КРЫШЕК (С интервалом, чтобы не пересекаться с врагами)
+    this.capSpawnTimer++;
+    if (this.capSpawnTimer > 160 && this.atomCaps.length === 0) {
+        this.spawnCapWave();
+        this.capSpawnTimer = 0;
     }
     
     // Движение врагов
@@ -216,11 +249,11 @@ Game.prototype.update = function () {
     for (let i = 0; i < this.atomCaps.length; i++) {
         this.atomCaps[i].update(this.runSpeed);
         let cap = this.atomCaps[i];
-        if (rightWall(this.dino) >= leftWall(cap) && 
-            leftWall(this.dino) <= rightWall(cap) && 
-            bottomWall(this.dino) >= topWall(cap) && 
-            topWall(this.dino) <= bottomWall(cap)) {
-                this.score += 10; // +10 за сбор
+        if (rightWall(this.dino) - 5 >= leftWall(cap) && 
+            leftWall(this.dino) + 5 <= rightWall(cap) && 
+            bottomWall(this.dino) - 5 >= topWall(cap) && 
+            topWall(this.dino) + 5 <= bottomWall(cap)) {
+                this.score += 10; 
                 this.atomCaps.splice(i, 1);
                 i--;
         }
@@ -228,18 +261,20 @@ Game.prototype.update = function () {
     
     // Столкновения с врагами
     for(let i = 0; i < this.cacti.length; i++){
-        if(rightWall(this.dino) - 20 >= leftWall(this.cacti[i]) && 
-           leftWall(this.dino) + 20 <= rightWall(this.cacti[i]) && 
-           bottomWall(this.dino) - 10 >= topWall(this.cacti[i])) {
+        if(rightWall(this.dino) - 18 >= leftWall(this.cacti[i]) && 
+           leftWall(this.dino) + 18 <= rightWall(this.cacti[i]) && 
+           bottomWall(this.dino) - 8 >= topWall(this.cacti[i]) &&
+           topWall(this.dino) + 8 <= bottomWall(this.cacti[i])) {
                this.paused = true;
                alert("ИГРА ОКОНЧЕНА!\nСобрано крышек: " + this.score);
                window.location.reload(); 
         }
     }
     
-    // ПАССИВНЫЙ ДОХОД (+1 крышка раз в полсекунды)
+    // ПАССИВНЫЙ ДОХОД (+1 за шаги)
     this.scoreTicks++;
-    if (this.scoreTicks >= 30) {
+    let pointsSpeed = this.runSpeed < -6 ? 20 : 30; // При ускорении очки капают быстрее!
+    if (this.scoreTicks >= pointsSpeed) {
         this.score += 1;
         this.scoreTicks = 0;
     }
