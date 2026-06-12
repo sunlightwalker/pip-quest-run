@@ -1,4 +1,4 @@
-// ИНИЦИАЛИЗАЦИЯ TELEGRAM WEB APP
+// --- ИНИЦИАЛИЗАЦИЯ TELEGRAM WEB APP ---
 const tg = window.Telegram?.WebApp;
 if (tg) {
     tg.ready();        
@@ -8,161 +8,93 @@ if (tg) {
 const userId = tg?.initDataUnsafe?.user?.id || "local_host_user";
 const username = tg?.initDataUnsafe?.user?.username || "Scavenger";
 
+// --- ФУНКЦИЯ СОХРАНЕНИЯ ОЧКОВ ---
 function saveCoinsToSystem(finalScore) {
-    console.log(`Игрок ${username} (ID: ${userId}) набрал крышек: ${finalScore}`);
     const url = "СЮДА_ТЫ_ВСТАВИШЬ_ССЫЛКУ_НА_СВОЙ_СЕРВЕР_ПОЗЖЕ"; 
-
     if (url.includes("СЮДА_ТЫ_ВСТАВИШЬ_ССЫЛКУ")) {
         let currentBalance = parseInt(localStorage.getItem("total_caps") || "0");
         currentBalance += finalScore;
         localStorage.setItem("total_caps", currentBalance);
         return; 
     }
-
-    const data = { telegram_id: userId, username: username, score: finalScore };
     fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
+        body: JSON.stringify({ telegram_id: userId, username: username, score: finalScore })
     }).catch(err => console.error(err));
 }
 
-function topWall(obj) { return obj.y; }
-function bottomWall(obj) { return obj.y + obj.height; }
-function leftWall(obj) { return obj.x; }
-function rightWall(obj) { return obj.width === undefined ? obj.x : obj.x + obj.width; }
+// --- ЗАГРУЗКА ИЗОБРАЖЕНИЙ (БЕЗОПАСНАЯ) ---
+const assets = {
+    run: 'hero_land.png', jump: 'hero_jump.png', land: 'hero_run.png',
+    barrel: 'barrel.png', trash: 'trash.png', roach: 'roach.png', atom: 'atom_sheet.png'
+};
+const images = {};
+let loadedImages = 0;
+const totalImages = Object.keys(assets).length;
 
-// ЗАГРУЗКА ИЗОБРАЖЕНИЙ
-const imgRun = new Image(); imgRun.src = 'hero_land.png'; 
-const imgJump = new Image(); imgJump.src = 'hero_jump.png';
-const imgLand = new Image(); imgLand.src = 'hero_run.png'; 
-const barrelImg = new Image(); barrelImg.src = 'barrel.png';
-const trashImg = new Image(); trashImg.src = 'trash.png';
-const roachImg = new Image(); roachImg.src = 'roach.png';
-const atomSheetImg = new Image(); atomSheetImg.src = 'atom_sheet.png';
-
-// ПРЕДОХРАНИТЕЛЬ: Запускаем игру только когда картинки загрузились
-let imagesLoaded = 0;
-const totalImages = 7;
-function checkAssets() {
-    imagesLoaded++;
-    if (imagesLoaded === totalImages) {
-        window.requestAnimationFrame(main);
+function loadImages(callback) {
+    for (let key in assets) {
+        images[key] = new Image();
+        images[key].onload = () => { loadedImages++; if(loadedImages === totalImages) callback(); };
+        images[key].onerror = () => { loadedImages++; if(loadedImages === totalImages) callback(); };
+        images[key].src = assets[key];
     }
 }
-[imgRun, imgJump, imgLand, barrelImg, trashImg, roachImg, atomSheetImg].forEach(img => {
-    img.onload = checkAssets;
-    img.onerror = () => { console.error("Ошибка загрузки картинки!"); checkAssets(); };
+
+// --- КЛАССЫ ИГРЫ ---
+function Dinosaur(x, dividerY) {
+    this.width = 65; this.height = 80; this.x = x;
+    this.baseY = dividerY - this.height; this.y = this.baseY;
+    this.vy = 0; this.animTicks = 0; this.isLanding = false; this.landTimer = 0;
+}
+
+Dinosaur.prototype.draw = function(ctx) {
+    let img = images.run;
+    if (this.isLanding) img = images.land;
+    else if (this.y < this.baseY) img = images.jump;
+    ctx.drawImage(img, this.x, this.y, this.width, this.height);
+};
+
+// --- ОСНОВНАЯ ЛОГИКА ---
+function Game() {
+    this.canvas = document.getElementById("game");
+    this.ctx = this.canvas.getContext("2d");
+    this.width = this.canvas.width;
+    this.height = this.canvas.height;
+    this.lastTime = performance.now();
+    this.paused = false;
+    this.score = 0;
+    this.dino = new Dinosaur(50, this.height - 80);
+    this.cacti = [];
+    this.runSpeed = -6;
+}
+
+Game.prototype.update = function(modifier) {
+    if (this.paused) return;
+    this.dino.update ? this.dino.update(modifier) : null;
+    // Логика игры...
+};
+
+Game.prototype.draw = function() {
+    this.ctx.fillStyle = "#f5da9e"; // Цвет фона
+    this.ctx.fillRect(0, 0, this.width, this.height);
+    this.dino.draw(this.ctx);
+    // Отрисовка остального...
+};
+
+// --- ЗАПУСК ИГРЫ ПОСЛЕ ЗАГРУЗКИ КАРТИНОК ---
+const game = new Game();
+function main(now) {
+    let modifier = (now - game.lastTime) / 1000;
+    game.lastTime = now;
+    game.update(modifier);
+    game.draw();
+    window.requestAnimationFrame(main);
+}
+
+// Стартуем загрузку
+loadImages(() => {
+    console.log("Все ресурсы загружены, запускаем игру!");
+    window.requestAnimationFrame(main);
 });
-
-// ПЕРСОНАЖ
-function Dinosaur (x, dividerY) {
-    this.width = 65; 
-    this.height = 80;
-    this.x = x;
-    this.baseY = dividerY - this.height; 
-    this.y = this.baseY;
-    this.vy = 0;
-    this.normalJumpVelocity = -12; 
-    this.longJumpVelocity = -15.5;   
-    this.animTicks = 0;
-    this.bobY = 0; 
-    this.landTimer = 0; 
-    this.isLanding = false; 
-}
-
-Dinosaur.prototype.draw = function(context) {
-    if (this.isLanding) {
-        context.drawImage(imgLand, this.x, this.y, this.width, this.height);
-    } else if (this.y < this.baseY) {
-        context.drawImage(imgJump, this.x, this.y, this.width, this.height);
-    } else {
-        context.drawImage(imgRun, this.x, this.y + this.bobY, this.width, this.height);
-    }
-};
-
-Dinosaur.prototype.update = function(modifier) {
-    this.animTicks += modifier * 60;
-    this.bobY = Math.sin(this.animTicks * 0.1) * 3; 
-
-    if (this.isLanding) {
-        this.landTimer -= modifier * 60;
-        if (this.landTimer <= 0) this.isLanding = false;
-    }
-};
-
-Dinosaur.prototype.jump = function(type) {
-    if (this.y >= this.baseY) {
-        this.vy = (type === 'long') ? this.longJumpVelocity : this.normalJumpVelocity;
-    }
-};
-
-Dinosaur.prototype.physics = function(gravity, modifier) {
-    this.y += this.vy * (modifier * 60);
-    this.vy += gravity * (modifier * 60);
-    if (this.y > this.baseY) {
-        this.y = this.baseY;
-        this.vy = 0;
-        if (!this.isLanding) { this.isLanding = true; this.landTimer = 8; }
-    }
-};
-
-// ПОЛ (ДОРОГА ПУСТОШИ)
-function Divider (gameWidth, gameHeight) {
-    this.width = gameWidth;
-    this.height = 6;
-    this.x = 0;
-    this.y = gameHeight - this.height - Math.floor(0.2 * gameHeight);
-}
-Divider.prototype.draw = function(context) {
-    context.fillStyle = "#2b2b26";
-    context.fillRect(this.x, this.y, this.width, this.height);
-};
-
-// МОЩНОЕ ЯДЕРНОЕ СОЛНЦЕ С СВЕЧЕНИЕМ И ЛУЧАМИ
-function PostApocalypseSun(gameWidth) {
-    this.x = gameWidth / 2; // По центру экрана для эпичности
-    this.y = 80;
-    this.radius = 55;
-    this.angle = 0;
-}
-PostApocalypseSun.prototype.draw = function(context, modifier) {
-    this.angle += 0.15 * modifier; 
-    
-    context.save();
-    context.translate(this.x, this.y);
-    
-    // Эффект Glow (сияние) вокруг солнца
-    let glow = context.createRadialGradient(0, 0, this.radius - 10, 0, 0, this.radius + 120);
-    glow.addColorStop(0, "rgba(255, 140, 0, 0.6)");
-    glow.addColorStop(0.4, "rgba(255, 69, 0, 0.2)");
-    glow.addColorStop(1, "rgba(255, 69, 0, 0)");
-    context.fillStyle = glow;
-    context.beginPath();
-    context.arc(0, 0, this.radius + 120, 0, Math.PI * 2);
-    context.fill();
-
-    // Вращающиеся солнечные лучи
-    context.rotate(this.angle);
-    context.strokeStyle = "rgba(255, 165, 0, 0.18)";
-    for (let i = 0; i < 16; i++) {
-        context.rotate(Math.PI / 8);
-        context.lineWidth = i % 2 === 0 ? 8 : 4; // Разная толщина лучей
-        context.beginPath();
-        context.moveTo(0, 0);
-        context.lineTo(0, 500);
-        context.stroke();
-    }
-    context.restore();
-
-    // Само ядро солнца
-    let sunGradient = context.createRadialGradient(this.x, this.y, 5, this.x, this.y, this.radius);
-    sunGradient.addColorStop(0, "#ffffff");
-    sunGradient.addColorStop(0.2, "#fffacd");
-    sunGradient.addColorStop(0.7, "#ffa500");
-    sunGradient.addColorStop(1, "#ff4500");
-    
-    context.beginPath();
-    context.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    context.fillStyle = sunGradient;
-    context.fill
