@@ -4,9 +4,9 @@ function leftWall(obj) { return obj.x; }
 function rightWall(obj) { return obj.x + obj.width; }
 
 // ЗАГРУЗКА ИГРОВЫХ КАРТИНОК
-const imgRun = new Image(); imgRun.src = 'hero_run.png';
+const imgRun = new Image(); imgRun.src = 'hero_land.png'; 
 const imgJump = new Image(); imgJump.src = 'hero_jump.png';
-const imgLand = new Image(); imgLand.src = 'hero_land.png'; 
+const imgLand = new Image(); imgLand.src = 'hero_run.png'; 
 const barrelImg = new Image(); barrelImg.src = 'barrel.png';
 const trashImg = new Image(); trashImg.src = 'trash.png';
 const roachImg = new Image(); roachImg.src = 'roach.png';
@@ -19,9 +19,8 @@ function Dinosaur (x, dividerY) {
     this.y = this.baseY;
     this.vy = 0;
     
-    // Сила прыжков
-    this.normalJumpVelocity = -12; // Обычный прыжок
-    this.longJumpVelocity = -15;   // Дальний прыжок
+    this.normalJumpVelocity = -11.5; // Обычный прыжок под бочку
+    this.longJumpVelocity = -15.5;   // Мощный прыжок под большой мусор
     
     this.animTicks = 0;
     this.bobY = 0; 
@@ -40,7 +39,7 @@ Dinosaur.prototype.draw = function(context) {
     } 
     else {
         this.animTicks++;
-        this.bobY = Math.sin(this.animTicks * 0.1) * 3; // Плавный бег под низкую скорость
+        this.bobY = Math.sin(this.animTicks * 0.1) * 3; 
         context.drawImage(imgRun, this.x, this.y + this.bobY, this.width, this.height);
     }
 };
@@ -81,18 +80,19 @@ function Cactus(gameWidth, groundY, forceType) {
     let rand = Math.random();
     this.isFlying = false;
 
-    // Если игра решила заспавнить именно таракана рядом с препятствием
     if (forceType === "roach" || (rand > 0.75 && !forceType)) {
         this.img = roachImg;
         this.width = 40; this.height = 40;
-        this.y = groundY - 155; // ПОДНЯЛИ ЕЩЕ ВЫШЕ! Проходим пешком снизу без проблем!
+        this.y = groundY - 155; 
         this.isFlying = true;
     } else if (rand < 0.4) {
+        // Бочка осталась прежней
         this.img = barrelImg;
         this.width = 35; this.height = 50;
     } else {
+        // УВЕЛИЧИЛИ МУСОР: Сделали его шире и выше (было 55х35, стало 75х48)
         this.img = trashImg;
-        this.width = 55; this.height = 35;
+        this.width = 75; this.height = 48;
     }
     
     this.x = gameWidth;
@@ -109,30 +109,59 @@ function Game () {
     this.height = canvas.height;
     this.context = canvas.getContext("2d");
     
-    // Считывание клавиш управления
-    document.spacePressed = false;
-    document.upPressed = false;
+    // Переменные для отслеживания удержания экрана
+    this.touchStartTime = 0;
+    this.isReadyToJump = false;
+
+    // Функция начала нажатия (Экран / Мышка)
+    const startPress = (e) => {
+        e.preventDefault();
+        if (this.startTimer > 0 || this.paused) return;
+        if (this.dino.y === this.dino.baseY) {
+            this.touchStartTime = Date.now();
+            this.isReadyToJump = true;
+        }
+    };
+
+    // Функция отпускания экрана (Определяет тип прыжка)
+    const endPress = (e) => {
+        e.preventDefault();
+        if (!this.isReadyToJump) return;
+        this.isReadyToJump = false;
+
+        let pressDuration = Date.now() - this.touchStartTime;
+
+        // Если удерживали экран дольше 200 миллисекунд (0.2 сек) — прыгаем далеко
+        if (pressDuration > 200) {
+            this.dino.jump('long');
+        } else {
+            this.dino.jump('normal');
+        }
+    };
+
+    // Слушатели для смартфонов (Тач-события)
+    canvas.addEventListener('touchstart', startPress, {passive: false});
+    canvas.addEventListener('touchend', endPress, {passive: false});
+
+    // Слушатели для ПК (Клик мышкой)
+    canvas.addEventListener('mousedown', startPress);
+    canvas.addEventListener('mouseup', endPress);
     
+    // Поддержка клавиатуры (Пробел - обычный, Стрелка вверх - дальний)
     window.addEventListener("keydown", (e) => { 
-        if (e.key === " ") document.spacePressed = true; 
-        if (e.key === "ArrowUp") document.upPressed = true;
-    });
-    window.addEventListener("keyup", (e) => { 
-        if (e.key === " ") document.spacePressed = false; 
-        if (e.key === "ArrowUp") document.upPressed = false;
+        if (e.key === " ") this.dino.jump('normal');
+        if (e.key === "ArrowUp") this.dino.jump('long');
     });
     
-    this.gravity = 0.65; // Очень мягкая гравитация для комфортных прыжков
+    this.gravity = 0.65; 
     this.divider = new Divider(this.width, this.height);
     this.dino = new Dinosaur(Math.floor(0.1 * this.width), this.divider.y);
     this.cacti = [];
     
-    this.runSpeed = -3.2; // МАКСИМАЛЬНО КОМФОРТНАЯ СКОРОСТЬ (была -6.5)
+    this.runSpeed = -3.2; 
     this.paused = false;
     this.score = 0;
-    
-    // СИСТЕМА ТАЙМЕРА СТАРТА
-    this.startTimer = 180; // 180 кадров = ровно 3 секунды при 60 FPS
+    this.startTimer = 180; 
 }
 
 Game.prototype.spawnCactus = function(prob, forceType) {
@@ -143,36 +172,23 @@ Game.prototype.spawnCactus = function(prob, forceType) {
 
 Game.prototype.update = function () {
     if(this.paused) return;
-    
-    // Если идет отсчет старта, уменьшаем таймер и не двигаем мир
     if (this.startTimer > 0) {
         this.startTimer--;
         return;
     }
     
-    // Управление прыжками
-    if (document.upPressed == true && bottomWall(this.dino) >= topWall(this.divider)) {
-        this.dino.jump('long'); // Дальний прыжок на стрелочку вверх
-    } else if (document.spacePressed == true && bottomWall(this.dino) >= topWall(this.divider)) {
-        this.dino.jump('normal'); // Обычный прыжок на пробел
-    }
-    
     this.dino.update(this.divider, this.gravity);
-    
     if(this.cacti.length > 0 && rightWall(this.cacti[0]) < 0) this.cacti.shift();
     
-    // Умный спавн препятствий
     if(this.cacti.length == 0) {
         this.spawnCactus(0.5);
     } else {
         let lastCactus = this.cacti[this.cacti.length - 1];
         let distance = this.width - leftWall(lastCactus);
         
-        // Если прошло достаточно места после бочки/мусора, подкидываем ТАРАКАНА поближе!
-        if (!lastCactus.isFlying && distance > 130 && distance < 140) {
-            this.spawnCactus(0.25, "roach"); // Высокий шанс спавна таракана сразу за наземным препятствием
+        if (!lastCactus.isFlying && distance > 150 && distance < 160) {
+            this.spawnCactus(0.25, "roach"); 
         } 
-        // Стандартный спавн новой пачки препятствий на большом расстоянии
         else if (distance > 380) {
             this.spawnCactus(0.02); 
         }
@@ -180,14 +196,14 @@ Game.prototype.update = function () {
     
     for (let i = 0; i < this.cacti.length; i++) this.cacti[i].x += this.runSpeed;
     
-    // Проверка хитбоксов столкновений (сделали хитбокс маскота чуть уже для честности)
+    // Проверка столкновений (адаптировали хитбоксы под большой мусор)
     for(let i = 0; i < this.cacti.length; i++){
         if(rightWall(this.dino) - 15 >= leftWall(this.cacti[i]) && 
            leftWall(this.dino) + 15 <= rightWall(this.cacti[i]) && 
            bottomWall(this.dino) - 4 >= topWall(this.cacti[i]) && 
            topWall(this.dino) + 4 <= bottomWall(this.cacti[i])) {
                this.paused = true;
-               alert("ИГРА ОКОНЧЕНА!\nКапитал сохранен: " + this.score + " крышек.\nНажми F5 для перезапуска.");
+               alert("ИГРА ОКОНЧЕНА!\nКапитал сохранен: " + this.score + " крышек.\nОбнови страницу, чтобы начать заново.");
         }
     }
     this.score++;
@@ -199,14 +215,13 @@ Game.prototype.draw = function () {
     this.dino.draw(this.context);
     for (let i = 0; i < this.cacti.length; i++) this.cacti[i].draw(this.context);
     
-    // РЕНДЕРИНГ ТАЙМЕРА СТАРТА
     if (this.startTimer > 0) {
         let secondsLeft = Math.ceil(this.startTimer / 60);
         this.context.fillStyle = "#000000";
         this.context.font = "bold 40px 'Courier New', monospace";
         this.context.textAlign = "center";
         this.context.fillText(secondsLeft, this.width / 2, this.height / 2);
-        this.context.textAlign = "left"; // сброс
+        this.context.textAlign = "left"; 
     }
     
     this.context.fillStyle = "#000000";
