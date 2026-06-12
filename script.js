@@ -90,7 +90,7 @@ function Cactus(gameWidth, groundY, forceType) {
         this.width = 35; this.height = 50;
     } else {
         this.img = trashImg;
-        this.width = 75; this.height = 48; // Большой мусор
+        this.width = 75; this.height = 48; 
     }
     
     this.x = gameWidth;
@@ -110,7 +110,7 @@ function Game () {
     this.touchStartTime = 0;
     this.isReadyToJump = false;
 
-    // ЖЕЛЕЗНОЕ СЕНСОРНОЕ УПРАВЛЕНИЕ (PointerEvents работают везде)
+    // ОБРАБОТКА НАЖАТИЙ НА ЭКРАН СМАРТФОНА ИЛИ КЛИКОВ МЫШКИ
     canvas.addEventListener('pointerdown', (e) => {
         if (this.startTimer > 0 || this.paused) return;
         if (this.dino.y === this.dino.baseY) {
@@ -125,7 +125,6 @@ function Game () {
 
         let pressDuration = Date.now() - this.touchStartTime;
 
-        // Если зажали дольше 220мс — прыжок дальний, если просто тапнули — обычный
         if (pressDuration > 220) {
             this.dino.jump('long');
         } else {
@@ -133,7 +132,7 @@ function Game () {
         }
     });
 
-    // Клавиатура для ПК тоже остается
+    // Клавиатура ПК (Пробел — обычный, Стрелка Вверх — дальний)
     window.addEventListener("keydown", (e) => { 
         if (e.key === " ") this.dino.jump('normal');
         if (e.key === "ArrowUp") this.dino.jump('long');
@@ -189,7 +188,7 @@ Game.prototype.update = function () {
            topWall(this.dino) + 4 <= bottomWall(this.cacti[i])) {
                this.paused = true;
                alert("ИГРА ОКОНЧЕНА!\nКапитал сохранен: " + this.score + " крышек.");
-               window.location.reload(); // Автоматически перезагрузит страницу при клике на окне смерти
+               window.location.reload(); 
         }
     }
     this.score++;
