@@ -43,7 +43,6 @@ Dinosaur.prototype.draw = function(context) {
 };
 
 Dinosaur.prototype.jump = function(type) {
-    // Упрощенная и надежная проверка для смартфонов: если на земле — прыгаем!
     if (this.y >= this.baseY) {
         this.vy = (type === 'long') ? this.longJumpVelocity : this.normalJumpVelocity;
     }
@@ -71,15 +70,24 @@ Divider.prototype.draw = function(context) {
     context.fillRect(this.x, this.y, this.width, this.height);
 };
 
-// ВРАГИ
+// ВРАГИ (С ОБНОВЛЕННЫМ ДВИЖЕНИЕМ ТАРАКАНА ВВЕРХ-ВНИЗ)
 function Cactus(gameWidth, groundY, forceType) {
     let rand = Math.random();
     this.isFlying = false;
+    
     if (forceType === "roach" || (rand > 0.8)) {
         this.img = roachImg;
-        this.width = 45; this.height = 45;
-        this.y = groundY - 140; // Таракан теперь летит ВЫШЕ, над коробками
+        this.width = 45; 
+        this.height = 45;
+        this.baseY = groundY - 130; // Базовая высота полета таракана
+        this.y = this.baseY;
         this.isFlying = true;
+        
+        // Логика маневрирования таракана во времени
+        this.moveTimer = 0;
+        this.moveInterval = 80 + Math.floor(Math.random() * 40); // 1.3 - 2 секунды на смену направления
+        this.directionY = Math.random() > 0.5 ? 1 : -1; // Начальное направление: 1 - вниз, -1 - вверх
+        this.speedY = 1.2; // Скорость перемещения по вертикали
     } else if (rand < 0.4) {
         this.img = barrelImg;
         this.width = 35; this.height = 50;
@@ -90,38 +98,61 @@ function Cactus(gameWidth, groundY, forceType) {
     this.x = gameWidth;
     if (!this.isFlying) this.y = groundY - this.height;
 }
+
+Cactus.prototype.update = function(speed) {
+    this.x += speed; // Движение влево вместе с уровнем
+
+    // Индивидуальное поведение для летящего таракана
+    if (this.isFlying) {
+        this.moveTimer++;
+        
+        // Каждые 1-2 секунды меняем направление движения
+        if (this.moveTimer >= this.moveInterval) {
+            this.directionY *= -1; // Разворот по вертикали
+            this.moveTimer = 0;
+        }
+
+        // Сдвигаем таракана вверх или вниз
+        this.y += this.directionY * this.speedY;
+
+        // Ограничиваем коридор полета, чтобы он не улетал в космос и не падал сквозь пол
+        let maxUp = this.baseY - 50;
+        let maxDown = this.baseY + 40;
+        if (this.y < maxUp) { this.y = maxUp; this.directionY = 1; }
+        if (this.y > maxDown) { this.y = maxDown; this.directionY = -1; }
+    }
+};
+
 Cactus.prototype.draw = function(context) {
     context.drawImage(this.img, this.x, this.y, this.width, this.height);
 };
 
-// КРЫШКА АТОМ-КОЛА (С ДВИЖЕНИЕМ ВВЕРХ-ВНИЗ)
+// КРЫШКА АТОМ-КОЛА
 function AtomCap(x, y, isAir) {
     this.width = 35;
     this.height = 35;
     this.x = x;
-    this.baseY = y; // Запоминаем стартовую высоту
+    this.baseY = y; 
     this.y = y;
-    this.isAir = isAir; // Находится ли в воздухе
+    this.isAir = isAir; 
     this.totalFrames = 5; 
     this.currentFrame = 0;
     this.animSpeed = 8; 
     this.tickCount = 0;
-    this.waveTicks = Math.random() * 100; // Случайный сдвиг фазы движения
+    this.waveTicks = Math.random() * 100; 
 }
 
 AtomCap.prototype.update = function(speed) {
     this.x += speed;
     
-    // Анимация вращения монеты
     this.tickCount++;
     if (this.tickCount >= this.animSpeed) {
         this.tickCount = 0;
         this.currentFrame = (this.currentFrame + 1) % this.totalFrames;
     }
 
-    // Движение Вверх-Вниз (синусоидальный эффект покачивания)
     this.waveTicks += 0.05;
-    let amplitude = this.isAir ? 25 : 8; // Воздушные крышки качаются сильнее
+    let amplitude = this.isAir ? 25 : 8; 
     this.y = this.baseY + Math.sin(this.waveTicks) * amplitude;
 };
 
@@ -144,9 +175,8 @@ function Game () {
     
     this.touchStartTime = 0;
 
-    // СВЕРХНАДЕЖНОЕ НАЖАТИЕ ДЛЯ СМАРТФОНОВ (touch-события вместо pointer)
     const handleStart = (e) => {
-        if (e.cancelable) e.preventDefault(); // Защита от скролла страницы браузером
+        if (e.cancelable) e.preventDefault(); 
         if (this.startTimer > 0 || this.paused) return;
         this.touchStartTime = Date.now();
     };
@@ -158,11 +188,8 @@ function Game () {
         else this.dino.jump('normal');
     };
 
-    // Слушатели для мобилок
     canvas.addEventListener('touchstart', handleStart, { passive: false });
     canvas.addEventListener('touchend', handleEnd, { passive: true });
-    
-    // Резервные слушатели для ПК мыши
     canvas.addEventListener('mousedown', handleStart);
     canvas.addEventListener('mouseup', handleEnd);
 
@@ -180,30 +207,27 @@ function Game () {
     this.gameTicks = 0; 
     this.startTimer = 120; 
 
-    // Раздельные таймеры спавна, чтобы объекты не слипались
     this.cactusSpawnTimer = 0;
     this.capSpawnTimer = 0;
 }
 
-// СПАВН ЦЕПОЧЕК КРЫШЕК СВЕРХУ И СНИЗУ
 Game.prototype.spawnCapWave = function() {
-    let type = Math.random() > 0.5; // true = Воздух, false = Земля
+    let type = Math.random() > 0.5; 
     let count = 3 + Math.floor(Math.random() * 3); 
     let startX = this.width + 100;
 
-    // Проверяем, чтобы рядом не было кактуса в момент спавна
     if (this.cacti.length > 0) {
         let lastCactus = this.cacti[this.cacti.length - 1];
-        if (this.width - lastCactus.x < 150) return; // Слишком близко к врагу, отменяем спавн
+        if (this.width - lastCactus.x < 150) return; 
     }
 
     for (let i = 0; i < count; i++) {
         let x = startX + (i * 45);
         let y;
         if (!type) {
-            y = this.divider.y - 45; // Снизу на земле
+            y = this.divider.y - 45; 
         } else {
-            y = this.divider.y - 125 - Math.sin(i * 0.8) * 35; // Сверху красивой дугой
+            y = this.divider.y - 125 - Math.sin(i * 0.8) * 35; 
         }
         this.atomCaps.push(new AtomCap(x, y, type));
     }
@@ -215,37 +239,32 @@ Game.prototype.update = function () {
     
     this.gameTicks++;
     
-    // ПЛАВНОЕ УСКОРЕНИЕ (каждые 10 сек)
     if (this.gameTicks % 600 === 0 && this.runSpeed > -9) {
         this.runSpeed -= 0.4;
     }
 
     this.dino.update(this.divider, this.gravity);
     
-    // Очистка памяти
     if(this.cacti.length > 0 && rightWall(this.cacti[0]) < 0) this.cacti.shift();
     if(this.atomCaps.length > 0 && rightWall(this.atomCaps[0]) < 0) this.atomCaps.shift();
     
-    // НЕЗАВИСИМЫЙ СПАВН ВРАГОВ
     this.cactusSpawnTimer++;
     if (this.cactusSpawnTimer > 110) { 
         if (Math.random() < 0.4) {
             this.cacti.push(new Cactus(this.width, this.divider.y));
-            this.cactusSpawnTimer = 0; // Сброс таймера только при успешном спавне
+            this.cactusSpawnTimer = 0; 
         }
     }
 
-    // НЕЗАВИСИМЫЙ СПАВН КРЫШЕК (С интервалом, чтобы не пересекаться с врагами)
     this.capSpawnTimer++;
     if (this.capSpawnTimer > 160 && this.atomCaps.length === 0) {
         this.spawnCapWave();
         this.capSpawnTimer = 0;
     }
     
-    // Движение врагов
-    for (let i = 0; i < this.cacti.length; i++) this.cacti[i].x += this.runSpeed;
+    // Обновление позиций врагов (включая вертикальные маневры таракана)
+    for (let i = 0; i < this.cacti.length; i++) this.cacti[i].update(this.runSpeed);
     
-    // Движение и сбор крышек
     for (let i = 0; i < this.atomCaps.length; i++) {
         this.atomCaps[i].update(this.runSpeed);
         let cap = this.atomCaps[i];
@@ -259,7 +278,6 @@ Game.prototype.update = function () {
         }
     }
     
-    // Столкновения с врагами
     for(let i = 0; i < this.cacti.length; i++){
         if(rightWall(this.dino) - 18 >= leftWall(this.cacti[i]) && 
            leftWall(this.dino) + 18 <= rightWall(this.cacti[i]) && 
@@ -271,9 +289,8 @@ Game.prototype.update = function () {
         }
     }
     
-    // ПАССИВНЫЙ ДОХОД (+1 за шаги)
     this.scoreTicks++;
-    let pointsSpeed = this.runSpeed < -6 ? 20 : 30; // При ускорении очки капают быстрее!
+    let pointsSpeed = this.runSpeed < -6 ? 20 : 30; 
     if (this.scoreTicks >= pointsSpeed) {
         this.score += 1;
         this.scoreTicks = 0;
