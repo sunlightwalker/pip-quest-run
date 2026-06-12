@@ -33,9 +33,9 @@ function leftWall(obj) { return obj.x; }
 function rightWall(obj) { return obj.width === undefined ? obj.x : obj.x + obj.width; }
 
 // ЗАГРУЗКА ИЗОБРАЖЕНИЙ ПЕРСОНАЖА И ВРАГОВ
-const imgRun = new Image(); imgRun.src = 'hero_land.png'; 
+const imgRun = new Image(); imgRun.src = 'hero_run.png'; 
 const imgJump = new Image(); imgJump.src = 'hero_jump.png';
-const imgLand = new Image(); imgLand.src = 'hero_run.png'; 
+const imgLand = new Image(); imgLand.src = 'hero_land.png'; 
 const barrelImg = new Image(); barrelImg.src = 'barrel.png';
 const trashImg = new Image(); trashImg.src = 'trash.png';
 const roachImg = new Image(); roachImg.src = 'roach.png';
