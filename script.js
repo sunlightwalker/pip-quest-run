@@ -284,24 +284,30 @@ function Game () {
     this.touchStartTime = 0;
     this.lastTime = performance.now(); 
 
-    const handleStart = (e) => {
+const handleStart = (e) => {
+        // Если это событие мыши (mousedown), просто выходим
+        if (e.type === 'mousedown') return; 
+        
         if (e.cancelable) e.preventDefault(); 
         if (this.startTimer > 0 || this.paused) return;
         this.touchStartTime = Date.now();
     };
 
     const handleEnd = (e) => {
+        // Если это событие мыши (mouseup), просто выходим
+        if (e.type === 'mouseup') return; 
+        
         if (this.startTimer > 0 || this.paused) return;
         let pressDuration = Date.now() - this.touchStartTime;
         if (pressDuration > 220) this.dino.jump('long');
         else this.dino.jump('normal');
     };
 
+    // Слушатели остаются, но функции теперь умеют фильтровать мышь
     canvas.addEventListener('touchstart', handleStart, { passive: false });
     canvas.addEventListener('touchend', handleEnd, { passive: true });
     canvas.addEventListener('mousedown', handleStart);
     canvas.addEventListener('mouseup', handleEnd);
-
     this.gravity = 0.6; 
     this.divider = new Divider(this.width, this.height);
     this.dino = new Dinosaur(50, this.divider.y);
