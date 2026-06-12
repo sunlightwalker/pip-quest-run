@@ -32,7 +32,7 @@ function bottomWall(obj) { return obj.y + obj.height; }
 function leftWall(obj) { return obj.x; }
 function rightWall(obj) { return obj.width === undefined ? obj.x : obj.x + obj.width; }
 
-// ЗАГРУЗКА ИЗОБРАЖЕНИЙ ПЕРСОНАЖА И ВРАГОВ
+// ЗАГРУЗКА ИЗОБРАЖЕНИЙ
 const imgRun = new Image(); imgRun.src = 'hero_land.png'; 
 const imgJump = new Image(); imgJump.src = 'hero_jump.png';
 const imgLand = new Image(); imgLand.src = 'hero_run.png'; 
@@ -40,6 +40,20 @@ const barrelImg = new Image(); barrelImg.src = 'barrel.png';
 const trashImg = new Image(); trashImg.src = 'trash.png';
 const roachImg = new Image(); roachImg.src = 'roach.png';
 const atomSheetImg = new Image(); atomSheetImg.src = 'atom_sheet.png';
+
+// ПРЕДОХРАНИТЕЛЬ: Запускаем игру только когда картинки загрузились
+let imagesLoaded = 0;
+const totalImages = 7;
+function checkAssets() {
+    imagesLoaded++;
+    if (imagesLoaded === totalImages) {
+        window.requestAnimationFrame(main);
+    }
+}
+[imgRun, imgJump, imgLand, barrelImg, trashImg, roachImg, atomSheetImg].forEach(img => {
+    img.onload = checkAssets;
+    img.onerror = () => { console.error("Ошибка загрузки картинки!"); checkAssets(); };
+});
 
 // ПЕРСОНАЖ
 function Dinosaur (x, dividerY) {
